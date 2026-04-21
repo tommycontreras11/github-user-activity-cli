@@ -10,21 +10,6 @@ const fetchUser = async (username) => {
             return   
         }
 
-        // let events = []
-
-        // for(let i = 0; i < response.length; i++) {
-        //     let repository = response[i]?.repo?.id
-        //     let type = response[i]?.type
-
-        //     if(events.includes(type)) {
-
-        //     }else {
-        //       events.push({
-        //         [type]: filterByTypeAndRepo(response, repository, type)
-        //       })
-        //     }
-        // }
-        
         let events = []
         let events_filtered = []
 
@@ -32,32 +17,25 @@ const fetchUser = async (username) => {
               events.push({
                 type: event.type,
                 repo: event.repo.name,
-                action: event?.payload?.action ?? null
+                payload: event.payload
               })
           }
     
-          // if (event.type === "PushEvent") {
-          //   console.log(`Pushed to ${event.repo.name}`);
-          // }
-        
-          // if (event.type === "IssuesEvent") {
-          //   console.log(`Worked on issue in ${event.repo.name}`);
-          // }
-
         for(let i = 0; i < events.length; i++) {
           let repo = events[i].repo
-          let action = events[i]?.action
+          let payload = events[i]?.payload
+          let action = events[i]?.payload?.action
           let type = events[i].type
 
-          if(events_filtered?.filter((a) => a.repo == repo && a.type == type && a?.action == action).length > 0) {
-            let findIndex = events_filtered.findIndex((a) => a.repo == repo && a.type == type && a?.action == action)
+          if(events_filtered?.filter((a) => a.repo == repo && a.type == type && a?.payload.action == action).length > 0) {
+            let findIndex = events_filtered.findIndex((a) => a.repo == repo && a.type == type && a?.payload.action == action)
 
             events_filtered[findIndex].count += 1
           } else {
             events_filtered.push({
                 type,
-                action,
                 repo,
+                payload,
                 count: 1
               })
 
@@ -65,36 +43,70 @@ const fetchUser = async (username) => {
         }
 
         for(const event of events_filtered) {
-          let count = event?.count
-          let action = event?.action
-          let repo = event.repo
-
-          if(event.type == GITHUB_ACTION_TYPE.PUSH_EVENT) { 
-            console.log(`Pushed ${count} ${count > 0 ? " commits" : " commit"} to ${repo}`)
-          }
-
-          if(event.type == GITHUB_ACTION_TYPE.WATCH_EVENT) { 
-            console.log(`Starred ${repo}`)
-          }
-
-          if(event.type == GITHUB_ACTION_TYPE.PULL_REQUEST_EVENT) { 
-            console.log(`${event.action.toUpperCase()} pull request`)
-          }
-
-          // if(event.type == GITHUB_ACTION_TYPE.PushEvent) { 
-          //   console.log(`Pushed ${count} ${count > 0 ? " commits" : " commit"} to`)
-          // }
+           console.log(`- ${formatEvent(event)}`)
         }
-        console.log(events_filtered)
     })
     .catch((error) => {
       console.log("Something went wrong: ", error);
     });
 };
 
-// const filterByTypeAndRepo = (events, repo_id, type) => {
-//     return events.filter((e) => e.repo.id == repo_id && e.type == type)
-// }
+const formatEvent = (event) => {
+  const repo = event.repo
+  let action = event?.payload?.action ?? null
+  const pr = event.payload.pull_request;
+  let message = ""
+
+  switch(event.type) {
+    case GITHUB_ACTION_TYPE.PUSH_EVENT:
+      const commits = event?.count
+
+        if (commits) {
+          return `Pushed ${commits} commit${commits !== 1 ? "s" : ""} to ${repo}`;
+        }
+      
+        return `Pushed to ${repo}`;
+    case GITHUB_ACTION_TYPE.WATCH_EVENT:
+      return `Starred ${repo}`
+      
+    case GITHUB_ACTION_TYPE.PULL_REQUEST_EVENT:
+      if(action == "opened") message = "Opened a new"
+      if(action == "reopened") message = "Reopened a"
+      if (action === "closed") {
+        if (pr?.merged) message = "Merged a"
+        else message = "Closed a"
+      }
+
+      return `${message + " pull request in " + repo}`
+      
+    case GITHUB_ACTION_TYPE.ISSUES_EVENT:
+      if(action == "opened") message = "Opened a new"
+      if(action == "reopened") message = "Reopened a"
+      if(action == "closed") message = "Closed a"
+
+      return `${message + " issue " + repo}`
+
+    case GITHUB_ACTION_TYPE.ISSUE_COMMENT_EVENT:
+      return `Commented on an issue in ${repo}`
+    
+    case GITHUB_ACTION_TYPE.WATCH_EVENT:
+      return `Starred ${repo}`
+    
+    case GITHUB_ACTION_TYPE.FORK_EVENT:
+      return `Forked ${repo}`
+
+    case GITHUB_ACTION_TYPE.RELEASE_EVENT:
+      if (action === "published") message = "Published a release in"
+      if (action === "unpublished") message = "Unpublished a release in"
+      if (action === "created") message = "Created a release in"
+      if (action === "edited") message = "Edited a release in"
+      if (action === "deleted") message = "Deleted a release in"
+      if (action === "prereleased") message = "Published a pre-release in"
+      if (action === "released") message = "Published a release in"
+
+      return `${message} ${repo}`
+  }
+}
 
 async function main() {
   process.stdin.on("data", async (data) => {
